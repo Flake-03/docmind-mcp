@@ -3,9 +3,7 @@ FROM python:3.12-slim
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     POETRY_VIRTUALENVS_CREATE=false \
-    POETRY_NO_INTERACTION=1 \
-    MCP_HOST=0.0.0.0 \
-    MCP_PORT=8000
+    POETRY_NO_INTERACTION=1
 
 WORKDIR /app
 RUN apt-get update \
@@ -15,7 +13,7 @@ RUN apt-get update \
 COPY pyproject.toml ./
 RUN poetry install --only main --no-root
 COPY src/ ./src/
-RUN chmod 0555 /app/src/git_askpass.sh \
+RUN chmod 0555 /app/src/project_docs_mcp/clients/git_askpass.sh \
     && useradd --create-home --uid 10001 appuser \
     && mkdir -p /data/git \
     && chown -R appuser:appuser /data
@@ -23,4 +21,4 @@ RUN chmod 0555 /app/src/git_askpass.sh \
 ENV PYTHONPATH=/app/src
 
 USER appuser
-CMD ["python", "-m", "main"]
+CMD ["python", "-m", "project_docs_mcp.server"]
