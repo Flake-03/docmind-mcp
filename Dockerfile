@@ -15,7 +15,7 @@ COPY pyproject.toml ./
 RUN poetry install --only main --no-root
 
 COPY src/ ./src/
-RUN chmod +x src/clients/git_askpass.sh
+RUN chmod +x src/integrations/github/git_askpass.sh
 
 ENV PYTHONPATH=/app
 

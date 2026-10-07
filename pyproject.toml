@@ -16,6 +16,20 @@ pydantic = "^2.13.5"
 pydantic-settings = "^2.15.0"
 uvicorn = "^0.54.0"
 
+[tool.poetry.group.dev.dependencies]
+ruff = "0.16.10"
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"

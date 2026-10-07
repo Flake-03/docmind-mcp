@@ -1,10 +1,10 @@
-import re
 from datetime import UTC, datetime
 from pathlib import Path
 from uuid import uuid4
 
-from ..clients.github import create_pull_request
 from ..config import Settings
+from ..integrations.github.git import GitService
+from ..integrations.github.github import create_pull_request
 from ..schemas.common import ProjectId, RelativePath, SearchQuery
 from ..schemas.documents import (
     DocumentChange,
@@ -13,12 +13,7 @@ from ..schemas.documents import (
     PullRequestBody,
     PullRequestTitle,
 )
-from .git import GitService
-from .paths import (
-    document_path,
-    safe_path,
-    validate_project_id,
-)
+from ..utils.paths import document_path, safe_path, validate_project_id
 
 MAX_FILE_BYTES = 512_000
 MAX_MATCHES = 50
@@ -42,9 +37,7 @@ class DocumentService:
                 raise ValueError("document is too large")
             return candidate.read_text(encoding="utf-8")
 
-    def search_documents(
-        self, query: SearchQuery, project_id: ProjectId | None = None
-    ) -> list[DocumentMatch]:
+    def search_documents(self, query: SearchQuery, project_id: ProjectId | None = None) -> list[DocumentMatch]:
         """Search merged Markdown documentation."""
         needle = query.strip().casefold()
         if not needle:
@@ -61,17 +54,12 @@ class DocumentService:
 
             matches: list[DocumentMatch] = []
             for path in sorted(search_root.rglob("*.md")):
-                if path.is_symlink() or not path.is_file():
-                    continue
-                if path.stat().st_size > MAX_FILE_BYTES:
+                if path.is_symlink() or not path.is_file() or path.stat().st_size > MAX_FILE_BYTES:
                     continue
 
-                relative = path.relative_to(projects_root)
-                match_project, *document_parts = relative.parts
+                match_project, *document_parts = path.relative_to(projects_root).parts
                 document = Path(*document_parts).as_posix()
-                for line_number, line in enumerate(
-                    path.read_text(encoding="utf-8").splitlines(), start=1
-                ):
+                for line_number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
                     if needle in line.casefold():
                         matches.append(
                             DocumentMatch(
@@ -105,18 +93,11 @@ class DocumentService:
                 relative = document_path(project_id, change.path)
                 destination = safe_path(self.git.root, relative, exists=False)
                 destination.parent.mkdir(parents=True, exist_ok=True)
-                destination.write_text(
-                    change.content.rstrip() + "\n", encoding="utf-8"
-                )
+                destination.write_text(change.content.rstrip() + "\n", encoding="utf-8")
                 changed_paths.append(relative.as_posix())
 
             commit = self.git.commit_and_push(title, branch, changed_paths)
-            pull_request_url = create_pull_request(
-                self.settings,
-                title,
-                body,
-                branch,
-            )
+            pull_request_url = create_pull_request(self.settings, title, body, branch)
             return PublishResult(
                 branch=branch,
                 commit=commit,
@@ -124,26 +105,20 @@ class DocumentService:
                 changed_files=sorted(changed_paths),
             )
 
-    def _validate_publish(
-        self, title: str, body: str, changes: list[DocumentChange]
-    ) -> None:
+    @staticmethod
+    def _validate_publish(title: str, body: str, changes: list[DocumentChange]) -> None:
         if not title.strip() or len(title) > 120:
             raise ValueError("title must contain 1 to 120 characters")
         if len(body) > 10_000:
             raise ValueError("pull request body exceeds 10,000 characters")
         if not changes or len(changes) > MAX_PUBLISH_FILES:
             raise ValueError(f"changes must contain 1 to {MAX_PUBLISH_FILES} files")
-        if (
-            sum(len(change.content.encode("utf-8")) for change in changes)
-            > MAX_PUBLISH_BYTES
-        ):
+        if sum(len(change.content.encode("utf-8")) for change in changes) > MAX_PUBLISH_BYTES:
             raise ValueError("documentation changes are too large")
-        paths = [change.path for change in changes]
-        if len(paths) != len(set(paths)):
+        if len({change.path for change in changes}) != len(changes):
             raise ValueError("changes contain duplicate document paths")
 
     @staticmethod
     def _new_branch(project_id: str) -> str:
         timestamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
-        safe_id = re.sub(r"[^A-Za-z0-9._-]", "-", project_id)
-        return f"docs/{safe_id}/{timestamp}-{uuid4().hex[:8]}"
+        return f"docs/{project_id}/{timestamp}-{uuid4().hex[:8]}"

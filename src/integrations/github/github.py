@@ -1,17 +1,10 @@
 import httpx
 
-from ..config import Settings
+from ...config import Settings
 
 
-def create_pull_request(
-    settings: Settings,
-    title: str,
-    body: str,
-    head: str,
-) -> str:
-    repository = settings.docs_repository_url.removeprefix(
-        "https://github.com/"
-    ).removesuffix(".git")
+def create_pull_request(settings: Settings, title: str, body: str, head: str) -> str:
+    repository = settings.docs_repository_url.removeprefix("https://github.com/").removesuffix(".git")
     response = httpx.post(
         f"https://api.github.com/repos/{repository}/pulls",
         headers={
@@ -28,6 +21,7 @@ def create_pull_request(
         timeout=30,
     )
     response.raise_for_status()
+
     url = response.json().get("html_url")
     if not isinstance(url, str) or not url:
         raise RuntimeError("GitHub response did not contain html_url")

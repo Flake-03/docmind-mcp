@@ -1,3 +1,4 @@
+import fnmatch
 import re
 from pathlib import Path
 
@@ -21,6 +22,32 @@ IGNORED_PARTS = {
 def validate_project_id(project_id: str) -> None:
     if not PROJECT_ID_PATTERN.fullmatch(project_id):
         raise ValueError("invalid project_id")
+
+
+def is_ignored_name(name: str) -> bool:
+    return name in IGNORED_PARTS or name.startswith(".env")
+
+
+def is_ignored_path(path: Path) -> bool:
+    return any(is_ignored_name(part) for part in path.parts)
+
+
+def is_text_file(path: Path) -> bool:
+    try:
+        with path.open("rb") as file:
+            sample = file.read(8_192)
+        sample.decode("utf-8")
+        return b"\0" not in sample
+    except (OSError, UnicodeDecodeError):
+        return False
+
+
+def matches_glob(path: str, pattern: str) -> bool:
+    return (
+        pattern in {"*", "**/*"}
+        or fnmatch.fnmatch(path, pattern)
+        or (pattern.startswith("**/") and fnmatch.fnmatch(path, pattern[3:]))
+    )
 
 
 def safe_path(root: Path, relative_path: str | Path, *, exists: bool = True) -> Path:

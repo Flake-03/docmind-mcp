@@ -3,11 +3,7 @@ from mcp.types import ToolAnnotations
 
 from ..services.projects import ProjectService
 
-READ_ONLY = ToolAnnotations(
-    read_only_hint=True,
-    idempotent_hint=True,
-    open_world_hint=False,
-)
+READ_ONLY = ToolAnnotations(read_only_hint=True, idempotent_hint=True, open_world_hint=False)
 
 
 def create_project_tools(service: ProjectService) -> LocalProvider:
