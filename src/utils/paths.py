@@ -71,7 +71,7 @@ def safe_path(root: Path, relative_path: str | Path, *, exists: bool = True) -> 
     return candidate
 
 
-def document_path(project_id: str, relative_path: str) -> Path:
+def doc_path(project_id: str, relative_path: str) -> Path:
     validate_project_id(project_id)
     path = Path(relative_path)
     if (

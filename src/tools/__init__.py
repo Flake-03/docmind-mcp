@@ -1,15 +1,15 @@
 from fastmcp import FastMCP
 
 from ..config import Settings
-from ..services.documents import DocumentService
-from ..services.projects import ProjectService
-from .documents import create_document_tools
-from .projects import create_project_tools
+from ..services.docs import DocsService
+from ..services.source import SourceService
+from .docs import create_docs_tools
+from .source import create_source_tools
 
 
 def register_tools(mcp: FastMCP, settings: Settings) -> None:
-    projects = ProjectService(settings.projects_root)
-    documents = DocumentService(settings)
+    source = SourceService(settings.projects_root)
+    docs = DocsService(settings)
 
-    mcp.add_provider(create_project_tools(projects))
-    mcp.add_provider(create_document_tools(documents))
+    mcp.add_provider(create_source_tools(source))
+    mcp.add_provider(create_docs_tools(docs))

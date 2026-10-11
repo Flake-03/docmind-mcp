@@ -2,7 +2,7 @@ from typing import Annotated
 
 from pydantic import BaseModel, Field, field_validator
 
-from .projects import SearchMatch
+from .source import SearchMatch
 
 PullRequestTitle = Annotated[str, Field(min_length=1, max_length=120)]
 PullRequestBody = Annotated[str, Field(max_length=10_000)]

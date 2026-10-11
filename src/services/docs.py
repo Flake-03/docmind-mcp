@@ -3,17 +3,17 @@ from pathlib import Path
 from uuid import uuid4
 
 from ..config import Settings
-from ..integrations.github.git import GitService
-from ..integrations.github.github import create_pull_request
+from ..integrations.github.pull_request import create_pull_request
+from ..integrations.github.repo import DocsRepo
 from ..schemas.common import ProjectId, RelativePath, SearchQuery
-from ..schemas.documents import (
+from ..schemas.docs import (
     DocumentChange,
     DocumentMatch,
     PublishResult,
     PullRequestBody,
     PullRequestTitle,
 )
-from ..utils.paths import document_path, safe_path, validate_project_id
+from ..utils.paths import doc_path, safe_path, validate_project_id
 
 MAX_FILE_BYTES = 512_000
 MAX_MATCHES = 50
@@ -21,21 +21,21 @@ MAX_PUBLISH_FILES = 8
 MAX_PUBLISH_BYTES = 250_000
 
 
-class DocumentService:
+class DocsService:
     def __init__(self, settings: Settings) -> None:
-        self.settings = settings
-        self.git = GitService(settings)
+        self._settings = settings
+        self._repo = DocsRepo(settings)
 
     def read_document(self, project_id: ProjectId, path: RelativePath) -> str:
         """Read one merged Markdown document."""
-        with self.git.synced():
-            relative = document_path(project_id, path)
-            candidate = safe_path(self.git.root, relative)
-            if not candidate.is_file():
+        with self._repo.synced():
+            relative_path = doc_path(project_id, path)
+            doc = safe_path(self._repo.repo_dir, relative_path)
+            if not doc.is_file():
                 raise ValueError("document does not exist")
-            if candidate.stat().st_size > MAX_FILE_BYTES:
+            if doc.stat().st_size > MAX_FILE_BYTES:
                 raise ValueError("document is too large")
-            return candidate.read_text(encoding="utf-8")
+            return doc.read_text(encoding="utf-8")
 
     def search_documents(self, query: SearchQuery, project_id: ProjectId | None = None) -> list[DocumentMatch]:
         """Search merged Markdown documentation."""
@@ -43,9 +43,9 @@ class DocumentService:
         if not needle:
             raise ValueError("query must not be blank")
 
-        with self.git.synced():
-            projects_root = self.git.root / "projects"
-            search_root = projects_root
+        with self._repo.synced():
+            projects_dir = self._repo.repo_dir / "projects"
+            search_root = projects_dir
             if project_id is not None:
                 validate_project_id(project_id)
                 search_root /= project_id
@@ -53,18 +53,18 @@ class DocumentService:
                 return []
 
             matches: list[DocumentMatch] = []
-            for path in sorted(search_root.rglob("*.md")):
-                if path.is_symlink() or not path.is_file() or path.stat().st_size > MAX_FILE_BYTES:
+            for doc in sorted(search_root.rglob("*.md")):
+                if doc.is_symlink() or not doc.is_file() or doc.stat().st_size > MAX_FILE_BYTES:
                     continue
 
-                match_project, *document_parts = path.relative_to(projects_root).parts
-                document = Path(*document_parts).as_posix()
-                for line_number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
+                matched_project_id, *document_parts = doc.relative_to(projects_dir).parts
+                relative_path = Path(*document_parts).as_posix()
+                for line_number, line in enumerate(doc.read_text(encoding="utf-8").splitlines(), start=1):
                     if needle in line.casefold():
                         matches.append(
                             DocumentMatch(
-                                project_id=match_project,
-                                path=document,
+                                project_id=matched_project_id,
+                                path=relative_path,
                                 line=line_number,
                                 text=line[:500],
                             )
@@ -84,20 +84,20 @@ class DocumentService:
         validate_project_id(project_id)
         self._validate_publish(title, body, changes)
 
-        with self.git.synced():
+        with self._repo.synced():
             branch = self._new_branch(project_id)
-            self.git.create_branch(branch)
+            self._repo.create_branch(branch)
 
             changed_paths: list[str] = []
             for change in changes:
-                relative = document_path(project_id, change.path)
-                destination = safe_path(self.git.root, relative, exists=False)
-                destination.parent.mkdir(parents=True, exist_ok=True)
-                destination.write_text(change.content.rstrip() + "\n", encoding="utf-8")
-                changed_paths.append(relative.as_posix())
+                relative_path = doc_path(project_id, change.path)
+                doc = safe_path(self._repo.repo_dir, relative_path, exists=False)
+                doc.parent.mkdir(parents=True, exist_ok=True)
+                doc.write_text(change.content.rstrip() + "\n", encoding="utf-8")
+                changed_paths.append(relative_path.as_posix())
 
-            commit = self.git.commit_and_push(title, branch, changed_paths)
-            pull_request_url = create_pull_request(self.settings, title, body, branch)
+            commit = self._repo.commit_and_push(title, branch, changed_paths)
+            pull_request_url = create_pull_request(self._settings, title, body, branch)
             return PublishResult(
                 branch=branch,
                 commit=commit,

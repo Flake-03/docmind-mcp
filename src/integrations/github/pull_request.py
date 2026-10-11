@@ -3,10 +3,10 @@ import httpx
 from ...config import Settings
 
 
-def create_pull_request(settings: Settings, title: str, body: str, head: str) -> str:
-    repository = settings.docs_repository_url.removeprefix("https://github.com/").removesuffix(".git")
+def create_pull_request(settings: Settings, title: str, body: str, branch: str) -> str:
+    repo = settings.docs_repository_url.removeprefix("https://github.com/").removesuffix(".git")
     response = httpx.post(
-        f"https://api.github.com/repos/{repository}/pulls",
+        f"https://api.github.com/repos/{repo}/pulls",
         headers={
             "Accept": "application/vnd.github+json",
             "Authorization": f"Bearer {settings.github_token}",
@@ -15,7 +15,7 @@ def create_pull_request(settings: Settings, title: str, body: str, head: str) ->
         json={
             "title": title,
             "body": body,
-            "head": head,
+            "head": branch,
             "base": settings.docs_base_branch,
         },
         timeout=30,
